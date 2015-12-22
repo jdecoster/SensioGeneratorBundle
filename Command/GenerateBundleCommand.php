@@ -303,37 +303,43 @@ EOT
         }
     }
 
-    protected function updateRouting(OutputInterface $output, Bundle $bundle)
+    protected function updateRouting(QuestionHelper $questionHelper, InputInterface $input, OutputInterface $output, $bundle, $format)
     {
-        $targetRoutingPath = $this->getContainer()->getParameter('kernel.root_dir').'/config/routing.yml';
-        $output->write(sprintf(
-            '> Importing the bundle\'s routes from the <info>%s</info> file: ',
-            $this->makePathRelative($targetRoutingPath)
-        ));
-        $routing = new RoutingManipulator($targetRoutingPath);
-        try {
-            $ret = $routing->addResource($bundle->getName(), $bundle->getConfigurationFormat());
-            if (!$ret) {
-                if ('annotation' === $bundle->getConfigurationFormat()) {
-                    $help = sprintf("        <comment>resource: \"@%s/Controller/\"</comment>\n        <comment>type:     annotation</comment>\n", $bundle->getName());
-                } else {
-                    $help = sprintf("        <comment>resource: \"@%s/Resources/config/routing.%s\"</comment>\n", $bundle->getName(), $bundle->getConfigurationFormat());
-                }
-                $help .= "        <comment>prefix:   /</comment>\n";
+        $auto = true;
+        if ($input->isInteractive()) {
+            $question = new ConfirmationQuestion($questionHelper->getQuestion('Confirm automatic update of the Routing', 'yes', '?'), true);
+            $auto = $questionHelper->ask($input, $output, $question);
+        }
 
+        if (!$auto) {
+            $output->write('Skipping importing the bundle routing resource: ');
+        } else {
+            $output->write('Importing the bundle routing resource: ');
+            $routing = new RoutingManipulator($this->getContainer()->getParameter('kernel.root_dir') . '/config/routing.yml');
+            try {
+                $ret = $auto ? $routing->addResource($bundle, $format) : true;
+                if (!$ret) {
+                    if ('annotation' === $format) {
+                        $help = sprintf("        <comment>resource: \"@%s/Controller/\"</comment>\n        <comment>type:     annotation</comment>\n", $bundle);
+                    } else {
+                        $help = sprintf("        <comment>resource: \"@%s/Resources/config/routing.%s\"</comment>\n", $bundle, $format);
+                    }
+                    $help .= "        <comment>prefix:   /</comment>\n";
+
+                    return array(
+                        '- Import the bundle\'s routing resource in the app main routing file:',
+                        '',
+                        sprintf('    <comment>%s:</comment>', $bundle),
+                        $help,
+                        '',
+                    );
+                }
+            } catch (\RuntimeException $e) {
                 return array(
-                    '- Import the bundle\'s routing resource in the app\'s main routing file:',
-                    '',
-                    sprintf('    <comment>%s:</comment>', $bundle->getName()),
-                    $help,
+                    sprintf('Bundle <comment>%s</comment> is already imported.', $bundle),
                     '',
                 );
             }
-        } catch (\RuntimeException $e) {
-            return array(
-                sprintf('Bundle <comment>%s</comment> is already imported.', $bundle->getName()),
-                '',
-            );
         }
     }
 
